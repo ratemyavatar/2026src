@@ -1,82 +1,110 @@
-# Custom Tags — updated scripts (2021-compatible)
+# Replacement guide — swap these files into Studio
 
-Drop-in replacements for the tag system in `r69 (1).rbxl`. No RBXL is shipped —
-paste each file over the matching script in Studio and republish.
+This folder contains the updated scripts. Below is exactly what to replace,
+and nothing else. Instance names and locations in Studio stay the same — you
+are only replacing the **Source** (the Lua code) of each script.
 
-| File | Where it goes | What changed |
-|---|---|---|
-| `TagConfig.lua` | `ReplicatedStorage/TagConfig` | + `thug` tag (shimmer, glowing white, users = thugshaker 49603). `headadmin` tag added but now **staff-list driven** (no hard-coded user). |
-| `TagHandler.lua` | `ServerScriptService/TagHandler` | + `RANK_HEADADMIN = 3` → staff-list rank 3 gets the `headadmin` **nametag**. `thug` kept in priority list so thugshaker always gets `[Thug]` (he's also in the owner list, and `pairs()` order is random). |
-| `Server.lua` | `ServerScriptService/Server` | **The chat-tag home.** + `RANK_HEADADMIN = 3` rank (Developer→4, Owner→5, all comparisons are `>=` so nothing else changes). Head Admin shows in the staff list, who-list, ADONIS sync and chat tag. + `Make Head Admin` command (owner-only) which writes Rank 3 into `StaffList_v2`. + `CUSTOM_CHAT_TAGS`: thugshaker (49603) gets `[Thug]` in yellow-gold `Color3.fromRGB(255, 200, 0)` with his name recolored gold, overriding his Owner chat tag. + **the `.tag` command** (see below). |
-| `VerifiedInChat.lua` | `StarterPlayerScripts/VerifiedInChat` | **Unchanged** (restored to original). Chat tags do NOT live here — they're in `Server.lua`'s `ApplyChatTag`, which is the real admin-panel chat tag system. |
+---
 
-## The `.tag` command
+## Files in this folder
 
-Works from chat (dot or slash form) and from the admin panel's free-text command box:
+| File | Replaces (in Studio) |
+|---|---|
+| `TagConfig.lua` | `ReplicatedStorage/TagConfig` (ModuleScript) |
+| `TagHandler.lua` | `ServerScriptService/TagHandler` (Script) |
+| `Server.lua` | `ServerScriptService/Server` (Script) |
+| `VerifiedInChat.lua` | `StarterPlayer/StarterPlayerScripts/VerifiedInChat` (LocalScript) |
 
-```
-.tag me <tag>          tag yourself (must be entitled to the tag)
-.tag <player> <tag>    Owners only: tag another player
-.tag me none           (or off / remove / reset) clears your tag
-```
+---
 
-**Owners only** — thugshaker (49603) is an Owner already, and there's an
-explicit UserId check keeping him allowed even if the owner table changes.
-Mods and Admins get "Only Owners can use the .tag command." — the command can
-apply *any* tag in `TagConfig`, so letting lower staff use it would let a mod
-give themselves the Owner tag.
+## Step 0 — Before you start
 
-Examples:
+1. Open the place (`r69 (1).rbxl`) in Roblox Studio.
+2. Make sure the **Explorer** window is open (View tab → Explorer).
+3. Make sure the **Script Editor** / output area is visible (View tab → Script Editor).
+4. Keep a copy of the original place file somewhere, so you can go back if needed.
+5. The `Server.lua` file is large (~124 KB). Copy it from this folder with
+   **Ctrl+A → Ctrl+C** in your text editor, then paste it into Studio in one go.
 
-- `.tag me thug` → thugshaker gets the `[Thug]` nametag + gold `[Thug]` chat tag.
-- `.tag Thugshaker thug` (owner) → same, applied to another player.
-- `.tag me headadmin` → the head admin gets the `[Head Admin]` gold tag.
-- `/tag bob premium` (owner, from chat or the panel box) → same as above.
+---
 
-Rules built in:
+## Step 1 — Replace `ReplicatedStorage/TagConfig`
 
-- **`.tag me`** — you can only take a tag you're entitled to: a `users` list in
-  `TagConfig` containing your UserId (e.g. thugshaker + `thug`), your actual
-  staff rank tag (`mod` / `admin` / `headadmin`), or anything if you're
-  Head Admin / Developer / Owner.
-- **`.tag <player>`** — Owners only (Mods/Admins can't use the command at all),
-  respects the normal rank rules (can't tag someone who outranks you).
-  `owner` / `developer` tags are script-locked, and rank tags (`mod`, `admin`,
-  `headadmin`) can only be applied to players who actually hold that rank.
-- The tag is stored in the player's `ActiveTag` attribute, so it **survives
-  respawns** (TagHandler re-applies the nametag) and re-applies to the chat
-  speaker whenever one appears (Server.lua `ApplyChatTag` reads the same
-  attribute).
-- Rank tags always follow the staff whitelist — `ApplyChatTag` ignores
-  `ActiveTag` for `mod`/`admin`/`headadmin`/`owner`/`developer` and uses the
-  real rank instead, so a promotion/demotion immediately fixes the chat tag.
+1. In the **Explorer**, expand `ReplicatedStorage`.
+2. Find the ModuleScript named **`TagConfig`** (it sits directly under ReplicatedStorage, next to `TopbarPlus`, `ModuleScript`, etc.).
+3. Double-click it — the ModuleScript editor opens.
+4. In the editor, press **Ctrl+A** (selects the entire current source) then **Delete** — the editor must be completely empty.
+5. Open `tag_scripts/TagConfig.lua` from this folder, **Ctrl+A → Ctrl+C** the whole file.
+6. Paste into the empty editor (**Ctrl+V**).
+7. Press **Ctrl+S** (saves the script — this saves into the place file).
 
+> Do NOT rename `TagConfig`, do NOT move it out of `ReplicatedStorage`, do NOT
+> create a second TagConfig anywhere.
 
-## How the tags get given
+---
 
-### Thug tag (thugshaker, 49603)
-- **Nametag:** `TagHandler.getAutoTag` → priority scan → `TagConfig["thug"]`
-  → `[Thug] ` + shimmer/white gradient above his head.
-- **Chat tag:** `Server.lua` `ApplyChatTag` → `CUSTOM_CHAT_TAGS[49603]`
-  → `SetExtraData("Tags", {{TagText = "[Thug] ", TagColor = gold}})`
-  + `SetExtraData("NameColor", gold)`.
+## Step 2 — Replace `ServerScriptService/TagHandler`
 
-### Head Admin tag
-- Put the head admin in the staff whitelist (`StaffList_v2`, key `"staff"`) with
-  **Rank = 3**. The easiest way: open the admin panel as Owner and use the new
-  **"Make Head Admin"** command (it shows in the COMMANDS grid). Or edit the
-  DataStore row directly: `{ Rank = 3, Name = "their name", By = "you" }`.
-- **Nametag:** `TagHandler` staff check → `headadmin` → `[Head Admin]` gold shimmer.
-- **Chat tag:** generic staff path → `RankLabel(3)` = `Head Admin` in gold
-  `Color3.fromRGB(255, 215, 0)`, name recolored gold.
-- The `LoadStaff` clamp (`rank >= RANK_DEV → Admin`) still blocks tampered ranks
-  4+, but Head Admin (3) is a real whitelist rank and survives restarts, exactly
-  like Mod/Admin.
-- Owner-only guard: only an Owner can grant/change Head Admin (admins get
-  "You cannot hand out a rank at or above your own.").
+1. In the **Explorer**, expand `ServerScriptService`.
+2. Find the Script named **`TagHandler`** (sits directly under ServerScriptService, between `VerifiedUsername` and `Server`).
+3. Double-click it to open the editor.
+4. **Ctrl+A → Delete** until the editor is completely empty.
+5. Open `tag_scripts/TagHandler.lua`, **Ctrl+A → Ctrl+C** the whole file, paste it in.
+6. **Ctrl+S**.
 
-## 2021 compatibility
-Everything used is 2019–2021 era: `Color3.fromRGB`, `ColorSequence`,
-`utf8.char`, `SetExtraData`, `SetAttribute`, `spawn()`/`wait()`. No `task.*`,
-no string interpolation, no `continue`. (The original `Server.lua` itself
-states it targets 2021-era Luau; the edits stay in that style.)
+> Do NOT rename `TagHandler`, do NOT move it out of `ServerScriptService`.
+
+---
+
+## Step 3 — Replace `ServerScriptService/Server`
+
+1. In the **Explorer**, still under `ServerScriptService`, find the Script named **`Server`** (it's right after `TagHandler` in the list — the large one).
+2. Double-click it to open the editor.
+3. **Ctrl+A → Delete** — the editor must be completely empty. (This one is big; make sure you deleted everything before pasting, otherwise you'll end up with two copies of the code on top of each other.)
+4. Open `tag_scripts/Server.lua` (the ~124 KB file), **Ctrl+A → Ctrl+C** the whole file, paste it in.
+5. **Ctrl+S**.
+
+> Do NOT rename `Server`, do NOT move it out of `ServerScriptService`. Do NOT
+> replace any other script in that folder — `AdminPanelServer`, `tvs`, `afk`,
+> `VerifiedUsername`, and the `ADONIS_v225` folder all stay untouched.
+
+---
+
+## Step 4 — Replace `StarterPlayer/StarterPlayerScripts/VerifiedInChat`
+
+1. In the **Explorer**, expand `StarterPlayer` → `StarterPlayerScripts`.
+2. Find the LocalScript named **`VerifiedInChat`** (between `clickdet` and `TopbarScript`).
+3. This file (`tag_scripts/VerifiedInChat.lua`) is the **original, untouched**
+   version. Only replace it if you previously pasted a *modified* version of
+   this script into Studio (from an earlier step). If you never touched it,
+   skip this step entirely.
+4. To replace: double-click it, **Ctrl+A → Delete**, paste the whole contents
+   of `tag_scripts/VerifiedInChat.lua`, **Ctrl+S**.
+
+---
+
+## Step 5 — Verify everything
+
+1. In the **Explorer**, confirm each replaced script is in the right place and
+   still named exactly: `ReplicatedStorage/TagConfig`,
+   `ServerScriptService/TagHandler`, `ServerScriptService/Server`,
+   `StarterPlayer/StarterPlayerScripts/VerifiedInChat`.
+2. Open each of the three replaced scripts and confirm there is exactly **one**
+   copy of the code (no duplicated blocks at the top or bottom) and the file
+   starts with `local TagConfig = {` / `-- // handler by matt and fuz` /
+   `--[[\n\tBooth admin script` respectively.
+3. Open the place in **Play** mode (or publish it) — the Output window should
+   show no `TagConfig not found` warnings from `Server`.
+4. File → **Save** (and File → Publish to Roblox if this is the live place).
+
+---
+
+## What NOT to touch
+
+- `ServerScriptService/AdminPanelServer`
+- `ServerStorage/AdminPanelClient`
+- `StarterGui/MainUI/Theguin`
+- The `ADONIS_v225` folder
+- The `ChatServiceRunner` (it's created by the engine, not in the place file)
+- Any script named `AdminPanelClient` / `AdminPanelServer` — the chat tag
+  system lives in `Server`, which you already replaced.
