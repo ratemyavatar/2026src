@@ -13,6 +13,7 @@ are only replacing the **Source** (the Lua code) of each script.
 | `TagConfig.lua` | `ReplicatedStorage/TagConfig` (ModuleScript) |
 | `TagHandler.lua` | `ServerScriptService/TagHandler` (Script) |
 | `Server.lua` | `ServerScriptService/Server` (Script) |
+| `Tags.lua` | `StarterPlayer/StarterPlayerScripts/Tags` (LocalScript) |
 | `VerifiedInChat.lua` | `StarterPlayer/StarterPlayerScripts/VerifiedInChat` (LocalScript) |
 
 ---
@@ -23,7 +24,7 @@ are only replacing the **Source** (the Lua code) of each script.
 2. Make sure the **Explorer** window is open (View tab → Explorer).
 3. Make sure the **Script Editor** / output area is visible (View tab → Script Editor).
 4. Keep a copy of the original place file somewhere, so you can go back if needed.
-5. The `Server.lua` file is large (~124 KB). Copy it from this folder with
+5. The `Server.lua` file is large (~130 KB). Copy it from this folder with
    **Ctrl+A → Ctrl+C** in your text editor, then paste it into Studio in one go.
 
 ---
@@ -70,7 +71,18 @@ are only replacing the **Source** (the Lua code) of each script.
 
 ---
 
-## Step 4 — Replace `StarterPlayer/StarterPlayerScripts/VerifiedInChat`
+## Step 4 — Replace `StarterPlayer/StarterPlayerScripts/Tags`
+
+1. In the **Explorer**, expand `StarterPlayer` → `StarterPlayerScripts`.
+2. Find the LocalScript named **`Tags`** (between `TopbarScript` and the `value` folder). This one MUST be replaced — it contains the new custom "Thug" animation style used by the thug tag.
+3. Double-click it, **Ctrl+A → Delete**, paste the whole contents of `tag_scripts/Tags.lua`, **Ctrl+S**.
+
+> Do NOT rename `Tags`, do NOT move it. Without this file the thug tag's
+> custom animation will not run (it would fall back to static text).
+
+---
+
+## Step 5 — Replace `StarterPlayer/StarterPlayerScripts/VerifiedInChat`
 
 1. In the **Explorer**, expand `StarterPlayer` → `StarterPlayerScripts`.
 2. Find the LocalScript named **`VerifiedInChat`** (between `clickdet` and `TopbarScript`).
@@ -83,19 +95,36 @@ are only replacing the **Source** (the Lua code) of each script.
 
 ---
 
-## Step 5 — Verify everything
+## Step 6 — Verify everything
 
 1. In the **Explorer**, confirm each replaced script is in the right place and
    still named exactly: `ReplicatedStorage/TagConfig`,
    `ServerScriptService/TagHandler`, `ServerScriptService/Server`,
+   `StarterPlayer/StarterPlayerScripts/Tags`,
    `StarterPlayer/StarterPlayerScripts/VerifiedInChat`.
-2. Open each of the three replaced scripts and confirm there is exactly **one**
-   copy of the code (no duplicated blocks at the top or bottom) and the file
-   starts with `local TagConfig = {` / `-- // handler by matt and fuz` /
-   `--[[\n\tBooth admin script` respectively.
+2. Open each replaced script and confirm there is exactly **one** copy of the
+   code (no duplicated blocks at the top or bottom) and the file starts with
+   `local TagConfig = {` / `-- // handler by matt and fuz` /
+   `--[[\n\tBooth admin script` / `-- // effects by matt and fuz` respectively.
 3. Open the place in **Play** mode (or publish it) — the Output window should
    show no `TagConfig not found` warnings from `Server`.
 4. File → **Save** (and File → Publish to Roblox if this is the live place).
+
+---
+
+## New commands (in-game, same `.` prefix)
+
+| Command | What it does |
+|---|---|
+| `.createtag <name> <r,g,b> <text...>` | Create a new tag (chat tag + overhead tag) in-game. e.g. `.createtag cool 0,255,255 [Cool] ` — saved to a DataStore, survives restarts, works with `.tag me cool`. |
+| `.deltag <name>` | Delete a tag you created in-game. |
+| `.tag me <name>` / `.tag <player> <name>` | Equip a tag (same as before). |
+
+All three are **Owners only** (plus thugshaker's UserId, hard-coded). The rank
+tag colours/animation styles are now unique: Mod = cyan Wave, Admin = red
+Shimmer, Head Admin = purple Spin, Developer = green Breath, Owner = yellow
+Pulse. The thug tag is black with a white glint sweep (new "Thug" animation
+style in `Tags.lua`); its chat tag stays yellow-gold so it stays readable.
 
 ---
 

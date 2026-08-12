@@ -863,10 +863,12 @@ local RankCache = {} -- [Player] = number
 	does nothing, which is exactly the kind of bug the ordering check looks for.
 --]]
 local RefreshTagsFor
--- Declared here too: the .tag command is dispatched from HandleChat, the
--- AdminCommand remote and the chat hook, all of which run before its
--- definition further down.
+-- Declared here too: the .tag / .createtag / .deltag commands are dispatched
+-- from HandleChat, the AdminCommand remote and the chat hook, all of which
+-- run before their definitions further down.
 local HandleTagCommand
+local HandleCreateTag
+local HandleDeleteTag
 
 local function ClearRankCache()
 	RankCache = {}
@@ -3230,6 +3232,20 @@ local function HandleChat(Player, message)
 	end
 
 	local rest = string.match(body, "^%S+%s+(.*)$") or ""
+
+	local lowerName = string.lower(name)
+	if lowerName == "createtag" then
+		local tagName = string.match(rest, "^(%S+)")
+		local afterName = string.match(rest, "^%S+%s+(.*)$") or ""
+		local colorArg = string.match(afterName, "^(%S+)")
+		local text = string.match(afterName, "^%S+%s+(.*)$") or ""
+		HandleCreateTag(Player, tagName, text, colorArg)
+		return
+	elseif lowerName == "deltag" then
+		HandleDeleteTag(Player, string.match(rest, "^(%S+)"))
+		return
+	end
+
 	local def = Commands[string.lower(name)]
 	if not def then
 		Notify(Player, "No command called \"" .. name .. "\".", true)
@@ -3734,6 +3750,16 @@ RemoteEvent.OnServerEvent:Connect(function(Player, Argument, Argument2)
 			HandleTagCommand(Player, Argument2.Target, Argument2.Value)
 			return
 		end
+		if argName == "createtag" or argName == ".createtag" then
+			local value = tostring(Argument2.Value or "")
+			local colorArg = string.match(value, "^(%S+)")
+			local text = string.match(value, "^%S+%s+(.*)$") or ""
+			HandleCreateTag(Player, Argument2.Target, text, colorArg)
+			return
+		elseif argName == "deltag" or argName == ".deltag" then
+			HandleDeleteTag(Player, Argument2.Target)
+			return
+		end
 		local okMsg, errMsg = RunCommand(Player, Argument2.Name, Argument2.Target, Argument2.Value)
 		Notify(Player, errMsg or okMsg, errMsg ~= nil)
 		return
@@ -3965,12 +3991,13 @@ end)
 
 local RANK_COLOUR = {}
 RANK_COLOUR[RANK_MOD] = Color3.fromRGB(130, 200, 255)
-RANK_COLOUR[RANK_ADMIN] = Color3.fromRGB(214, 170, 255)
-RANK_COLOUR[RANK_HEADADMIN] = Color3.fromRGB(255, 215, 0)
----- Green, so Developer is not mistaken for Admin purple or Owner gold at a
----- glance. The five ranks have to be tellable apart across a room.
+RANK_COLOUR[RANK_ADMIN] = Color3.fromRGB(255, 70, 70)
+RANK_COLOUR[RANK_HEADADMIN] = Color3.fromRGB(170, 85, 255)
+---- Unique per rank: Mod cyan, Admin red, Head Admin purple, Developer
+---- green, Owner yellow. Each rank also has its own animation style in
+---- TagConfig (Wave / Shimmer / Spin / Breath / Pulse).
 RANK_COLOUR[RANK_DEV] = Color3.fromRGB(120, 235, 160)
-RANK_COLOUR[RANK_OWNER] = Color3.fromRGB(255, 196, 92)
+RANK_COLOUR[RANK_OWNER] = Color3.fromRGB(255, 230, 0)
 
 --local TAG_NAME = "StaffTag"
 
@@ -4118,8 +4145,9 @@ local function ApplyChatTag(Player)
 			local cfg = TagConfig[activeTag]
 			if type(cfg) == "table" then
 				local color = cfg.chatColor or cfg.textColor or RANK_COLOUR[RankOf(Player)]
+				local displayText = type(cfg.text) == "string" and cfg.text or ("[" .. activeTag .. "] ")
 				speaker:SetExtraData("Tags", {
-					{TagText = cfg.text or "", TagColor = color},
+					{TagText = displayText, TagColor = color},
 				})
 				speaker:SetExtraData("NameColor", color)
 				return
@@ -4357,6 +4385,144 @@ local function HandleTagCommand(player, targetQuery, tagName)
 	end
 end
 
+--------------------------------------------------------------------------------
+-- .createtag / .deltag — make new tags in game
+--------------------------------------------------------------------------------
+--[[
+	.createtag <name> <r,g,b> <text...>     create a tag (chat + overhead)
+	.deltag <name>                          delete a tag you created
+
+	Same dot prefix and same permission as .tag: Owners only, plus
+	thugshaker. Created tags are saved in a DataStore so they survive
+	restarts, show up in the .tag list and work with .tag me <name>.
+	The chat tag and the overhead tag both use the colour you give it
+	(chat tags cannot animate, so created tags render static).
+--]]
+local CUSTOM_TAGS_STORE = "CustomTags_v1"
+local CustomTagsStore = nil
+local createdTags = {}
+
+local customTagsOk, customTagsRes = pcall(function()
+	return DataStoreService:GetDataStore(CUSTOM_TAGS_STORE)
+end)
+if customTagsOk then
+	CustomTagsStore = customTagsRes
+else
+	warn("[Admin] Custom tag DataStore unavailable, .createtag tags will only last this server: " .. tostring(customTagsRes))
+end
+
+local function LoadCustomTags()
+	if not CustomTagsStore then
+		return
+	end
+	local ok, res = pcall(function()
+		return CustomTagsStore:GetAsync("tags")
+	end)
+	if ok and type(res) == "table" then
+		for name, cfg in pairs(res) do
+			if type(name) == "string" and type(cfg) == "table" then
+				TagConfig[name] = cfg
+				createdTags[name] = true
+			end
+		end
+	end
+end
+
+local function SaveCustomTags()
+	if not CustomTagsStore then
+		return
+	end
+	local snap = {}
+	for name in pairs(createdTags) do
+		snap[name] = TagConfig[name]
+	end
+	pcall(function()
+		CustomTagsStore:SetAsync("tags", snap)
+	end)
+end
+
+local function HandleCreateTag(player, tagName, text, colorArg)
+	if not TagConfig then
+		Notify(player, "The tag system is not configured.", true)
+		return
+	end
+	if RankOf(player) < RANK_OWNER and player.UserId ~= 49603 then
+		Notify(player, "Only Owners can use the .createtag command.", true)
+		return
+	end
+
+	tagName = string.lower(tostring(tagName or ""))
+	text = tostring(text or "")
+	colorArg = tostring(colorArg or "")
+
+	if tagName == "" or text == "" then
+		Notify(player, "Usage: .createtag <name> <r,g,b> <text>", true)
+		return
+	end
+	if not string.match(tagName, "^[a-z0-9_]+$") then
+		Notify(player, "Tag name must be letters, numbers or _.", true)
+		return
+	end
+	if TagConfig[tagName] and not createdTags[tagName] then
+		Notify(player, "A tag called " .. tagName .. " already exists.", true)
+		return
+	end
+
+	local r, g, b = string.match(colorArg, "^(%d+)%s*,%s*(%d+)%s*,%s*(%d+)$")
+	if not r then
+		Notify(player, "Colour must be r,g,b, e.g. .createtag cool 255,200,0 [Cool] ", true)
+		return
+	end
+	local colour = Color3.fromRGB(
+		math.clamp(tonumber(r), 0, 255),
+		math.clamp(tonumber(g), 0, 255),
+		math.clamp(tonumber(b), 0, 255))
+
+	TagConfig[tagName] = {
+		text = text,
+		textColor = colour,
+		chatColor = colour,
+		animated = false,
+		animationStyle = "Wave",
+		created = true,
+	}
+	createdTags[tagName] = true
+	SaveCustomTags()
+
+	LogAction(player, "created tag " .. tagName)
+	Notify(player, "Created tag " .. tagName .. ". Use .tag me " .. tagName .. " to equip it.", false)
+end
+
+local function HandleDeleteTag(player, tagName)
+	if not TagConfig then
+		Notify(player, "The tag system is not configured.", true)
+		return
+	end
+	if RankOf(player) < RANK_OWNER and player.UserId ~= 49603 then
+		Notify(player, "Only Owners can use the .deltag command.", true)
+		return
+	end
+
+	tagName = string.lower(tostring(tagName or ""))
+	if tagName == "" then
+		Notify(player, "Usage: .deltag <name>", true)
+		return
+	end
+	if not createdTags[tagName] then
+		Notify(player, tagName .. " is not a created tag.", true)
+		return
+	end
+
+	TagConfig[tagName] = nil
+	createdTags[tagName] = nil
+	SaveCustomTags()
+
+	LogAction(player, "deleted tag " .. tagName)
+	Notify(player, "Deleted tag " .. tagName .. ".", false)
+end
+
+LoadCustomTags()
+
 -- Called whenever somebody's rank changes, so both tags follow immediately.
 -- Assigns the forward local declared up with the rank state.
 function RefreshTagsFor(Player)
@@ -4414,6 +4580,20 @@ local function PlayerAdded(Player)
 			local targetQuery = string.match(rest, "^(%S+)")
 			local value = string.match(rest, "^%S+%s+(.*)$") or ""
 			HandleTagCommand(Player, targetQuery, value)
+			return
+		end
+		if tagLower == ".createtag" or string.match(tagLower, "^%.createtag%s") then
+			local rest = string.match(message, "^%s*%.createtag%s+(.*)$") or ""
+			local tagName = string.match(rest, "^(%S+)")
+			local afterName = string.match(rest, "^%S+%s+(.*)$") or ""
+			local colorArg = string.match(afterName, "^(%S+)")
+			local text = string.match(afterName, "^%S+%s+(.*)$") or ""
+			HandleCreateTag(Player, tagName, text, colorArg)
+			return
+		end
+		if tagLower == ".deltag" or string.match(tagLower, "^%.deltag%s") then
+			local tagName = string.match(message, "^%s*%.deltag%s+(%S+)")
+			HandleDeleteTag(Player, tagName)
 			return
 		end
 
