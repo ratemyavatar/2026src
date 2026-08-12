@@ -9,6 +9,7 @@ local STAFF_DATASTORE = "StaffList_v2"
 local STAFF_REFRESH_SECONDS = 60
 local RANK_MOD = 1
 local RANK_ADMIN = 2
+local RANK_HEADADMIN = 3
 
 local StaffStore = nil
 local ok, res = pcall(function()
@@ -60,7 +61,9 @@ end)
 
 local function getStaffTag(player)
 	local rank = StaffRanks[player.UserId]
-	if rank == RANK_ADMIN then
+	if rank == RANK_HEADADMIN then
+		return "headadmin"
+	elseif rank == RANK_ADMIN then
 		return "admin"
 	elseif rank == RANK_MOD then
 		return "mod"
@@ -131,7 +134,7 @@ end
 -- Custom user tags that must win when a player is in several users lists
 -- (thugshaker is also in the "owner" list, and pairs() order is random, so
 -- without this he could randomly get "[Owner]" instead of "[Thug]").
-local PRIORITY_TAGS = { "thug", "headadmin" }
+local PRIORITY_TAGS = { "thug" }
 
 local function getAutoTag(player)
 	local staffTag = getStaffTag(player)

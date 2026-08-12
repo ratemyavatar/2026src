@@ -1,8 +1,3 @@
--- ======================================================================
--- HEAD ADMIN: paste the head admin's Roblox UserId into the line below.
--- ======================================================================
-local HEAD_ADMIN_USER_ID = 0 -- TODO: replace 0 with the head admin's UserId
-
 local TagConfig = {
 	-- fallback
 	DefaultFont = Enum.Font.SourceSans,
@@ -191,6 +186,9 @@ local TagConfig = {
 	},
 
 	-- Head admin custom tag: royal gold shimmer.
+	-- Given via the staff list: put the head admin in the StaffList_v2
+	-- whitelist with Rank 3 (the "Make Head Admin" command in the admin
+	-- panel does this for you) and TagHandler hands out this tag.
 	["headadmin"] = {
 		text = "[Head Admin] ",
 		animated = true,
@@ -202,7 +200,6 @@ local TagConfig = {
 			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 255)),
 			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 215, 0)),
 		}),
-		users = {HEAD_ADMIN_USER_ID},
 	},
 
 	["test"] = {
