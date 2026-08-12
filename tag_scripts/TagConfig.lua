@@ -177,6 +177,8 @@ local TagConfig = {
 		animationStyle = "Shimmer",
 		speed = 1,
 		textColor = Color3.fromRGB(255, 255, 255),
+		-- Chat tag colour: yellow-gold, matches the old verified chat gold.
+		chatColor = Color3.fromRGB(255, 200, 0),
 		gradientColors = ColorSequence.new({
 			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
 			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(215, 225, 255)),
@@ -195,6 +197,7 @@ local TagConfig = {
 		animationStyle = "Shimmer",
 		speed = 1,
 		textColor = Color3.fromRGB(255, 215, 0),
+		chatColor = Color3.fromRGB(255, 215, 0),
 		gradientColors = ColorSequence.new({
 			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 215, 0)),
 			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 255)),

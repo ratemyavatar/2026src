@@ -58,6 +58,18 @@ local Lighting = game:GetService("Lighting")
 
 local RemoteEvent = ReplicatedStorage:WaitForChild("RemoteEvent")
 
+-- Optional, not fatal: without TagConfig the .tag command and custom
+-- nametags are disabled, but the rest of the admin system still works.
+local TagConfig = nil
+local tagConfigOk, tagConfigRes = pcall(function()
+	return require(ReplicatedStorage:WaitForChild("TagConfig"))
+end)
+if tagConfigOk then
+	TagConfig = tagConfigRes
+else
+	warn("[Admin] TagConfig not found, the .tag command is disabled: " .. tostring(tagConfigRes))
+end
+
 -- Find-or-create. Never WaitForChild here: if the folder is missing the whole
 -- script would hang forever and nothing would be claimable.
 local Booths = Workspace:FindFirstChild("Booths")
@@ -851,6 +863,10 @@ local RankCache = {} -- [Player] = number
 	does nothing, which is exactly the kind of bug the ordering check looks for.
 --]]
 local RefreshTagsFor
+-- Declared here too: the .tag command is dispatched from HandleChat, the
+-- AdminCommand remote and the chat hook, all of which run before its
+-- definition further down.
+local HandleTagCommand
 
 local function ClearRankCache()
 	RankCache = {}
@@ -3228,6 +3244,11 @@ local function HandleChat(Player, message)
 		value = string.match(rest, "^%S+%s+(.*)$") or ""
 	end
 
+	if string.lower(name) == "tag" then
+		HandleTagCommand(Player, targetQuery, value)
+		return
+	end
+
 	local okMsg, errMsg = RunCommand(Player, name, targetQuery, value)
 	Notify(Player, errMsg or okMsg, errMsg ~= nil)
 end
@@ -3708,6 +3729,11 @@ RemoteEvent.OnServerEvent:Connect(function(Player, Argument, Argument2)
 		if type(Argument2) ~= "table" then
 			return
 		end
+		local argName = string.lower(tostring(Argument2.Name))
+		if argName == "tag" or argName == ".tag" then
+			HandleTagCommand(Player, Argument2.Target, Argument2.Value)
+			return
+		end
 		local okMsg, errMsg = RunCommand(Player, Argument2.Name, Argument2.Target, Argument2.Value)
 		Notify(Player, errMsg or okMsg, errMsg ~= nil)
 		return
@@ -4059,6 +4085,20 @@ local CUSTOM_CHAT_TAGS = {
 	[49603] = { Text = "[Thug] ", Color = Color3.fromRGB(255, 200, 0) }, -- thugshaker
 }
 
+-- Rank tags always follow the staff whitelist (the .tag command cannot hand
+-- these out), so ApplyChatTag skips them and lets the rank path below win.
+local RANK_TAGS = { mod = true, admin = true, headadmin = true, owner = true, developer = true }
+
+-- What rank a player must actually hold for a staff member to apply that
+-- rank's tag to them with the .tag command.
+local RANK_TAG_REQUIRE = {
+	mod = RANK_MOD,
+	admin = RANK_ADMIN,
+	headadmin = RANK_HEADADMIN,
+	owner = RANK_OWNER,
+	developer = RANK_DEV,
+}
+
 local function ApplyChatTag(Player)
 	if not ChatServiceRef then
 		return
@@ -4068,6 +4108,22 @@ local function ApplyChatTag(Player)
 		local speaker = ChatServiceRef:GetSpeaker(Player.Name)
 		if not speaker then
 			return
+		end
+
+		-- Custom tag set with the .tag command: it lives in the player's
+		-- ActiveTag attribute (also maintained by TagHandler), so it
+		-- survives respawns and re-applies whenever a speaker appears.
+		local activeTag = Player:GetAttribute("ActiveTag")
+		if activeTag and not RANK_TAGS[activeTag] then
+			local cfg = TagConfig[activeTag]
+			if type(cfg) == "table" then
+				local color = cfg.chatColor or cfg.textColor or RANK_COLOUR[RankOf(Player)]
+				speaker:SetExtraData("Tags", {
+					{TagText = cfg.text or "", TagColor = color},
+				})
+				speaker:SetExtraData("NameColor", color)
+				return
+			end
 		end
 
 		local custom = CUSTOM_CHAT_TAGS[Player.UserId]
@@ -4135,6 +4191,163 @@ spawn(function()
 	end
 end)
 
+--------------------------------------------------------------------------------
+-- .tag command
+--------------------------------------------------------------------------------
+--[[
+	.tag me <tag>           tag yourself (must be entitled to the tag)
+	.tag <player> <tag>     staff only (Mod and up) tag another player
+	.tag me none            (or off / remove / reset) clears your tag
+
+	Works from chat (".tag"), from chat as "/tag", and from the admin
+	panel's free-text command box. Custom tags set this way are remembered
+	across respawns via the player's ActiveTag attribute, and show up both
+	as the nametag and as the chat tag.
+--]]
+local TAG_CLEAR_WORDS = { none = true, off = true, remove = true, reset = true }
+
+local function CanUseTag(player, tagName)
+	local config = TagConfig[tagName]
+	if type(config) ~= "table" then
+		return false
+	end
+	local rank = RankOf(player)
+	if rank >= RANK_HEADADMIN then
+		return true
+	end
+	if tagName == "mod" then
+		return rank >= RANK_MOD
+	elseif tagName == "admin" then
+		return rank >= RANK_ADMIN
+	elseif tagName == "headadmin" then
+		return rank >= RANK_HEADADMIN
+	end
+	if config.users then
+		local i
+		for i = 1, #config.users do
+			if config.users[i] == player.UserId then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- Rebuilds the overhead nametag for one player (mirrors TagHandler.applytag).
+local function SetNametagTag(player, tagName)
+	local character = player.Character
+	if not character then
+		return
+	end
+	local head = character:FindFirstChild("Head")
+	local attachment = head and head:FindFirstChild("overhead")
+	local billboard = attachment and attachment:FindFirstChildOfClass("BillboardGui")
+	local nameLabel = billboard and billboard:FindFirstChild("name")
+	if not nameLabel then
+		return
+	end
+	local config = tagName and TagConfig[tagName]
+	if type(config) == "table" then
+		nameLabel.Text = (config.text or "") .. player.Name
+		nameLabel.Font = config.font or TagConfig.DefaultFont
+		nameLabel.TextColor3 = config.textColor or TagConfig.DefaultColor
+		billboard:SetAttribute("TagType", tagName)
+		return
+	end
+	nameLabel.Text = player.Name
+	nameLabel.Font = TagConfig.DefaultFont
+	nameLabel.TextColor3 = TagConfig.DefaultColor
+	billboard:SetAttribute("TagType", "None")
+end
+
+local function HandleTagCommand(player, targetQuery, tagName)
+	if not TagConfig then
+		Notify(player, "The tag system is not configured.", true)
+		return
+	end
+
+	targetQuery = tostring(targetQuery or "")
+	tagName = string.lower(tostring(tagName or ""))
+
+	if targetQuery == "" then
+		Notify(player, "Usage: .tag me <tag>  or  .tag <player> <tag>.", true)
+		return
+	end
+
+	local target = player
+	local isSelf = string.lower(targetQuery) == "me"
+
+	if not isSelf then
+		if RankOf(player) < RANK_MOD then
+			Notify(player, "Staff only: .tag <player> <tag>.", true)
+			return
+		end
+
+		local resolved, err = ResolvePlayer(targetQuery)
+		if not resolved then
+			Notify(player, err or "Player not found.", true)
+			return
+		end
+
+		local allowed, why = CanActOn(player, resolved.UserId)
+		if not allowed then
+			Notify(player, why or "You cannot tag that player.", true)
+			return
+		end
+		target = resolved
+	end
+
+	if TAG_CLEAR_WORDS[tagName] then
+		target:SetAttribute("ActiveTag", nil)
+		SetNametagTag(target, nil)
+		ApplyChatTag(target)
+		if isSelf then
+			Notify(player, "Tag removed.", false)
+		else
+			LogAction(player, "removed " .. target.Name .. "'s tag.")
+			Notify(player, "Removed " .. target.Name .. "'s tag.", false)
+		end
+		return
+	end
+
+	if not TagConfig[tagName] then
+		local names = {}
+		for name, def in pairs(TagConfig) do
+			if type(def) == "table" then
+				names[#names + 1] = name
+			end
+		end
+		Notify(player, "Unknown tag. Try: " .. table.concat(names, ", "), true)
+		return
+	end
+
+	if not isSelf then
+		if tagName == "owner" or tagName == "developer" then
+			Notify(player, "The Owner and Developer tags are script-locked.", true)
+			return
+		end
+		local need = RANK_TAG_REQUIRE[tagName]
+		if need and RankOfUserId(target.UserId) < need then
+			Notify(player, target.Name .. " is not actually " .. RankLabel(need) .. ".", true)
+			return
+		end
+	elseif not CanUseTag(player, tagName) then
+		Notify(player, "You cannot use that tag.", true)
+		return
+	end
+
+	target:SetAttribute("ActiveTag", tagName)
+	SetNametagTag(target, tagName)
+	ApplyChatTag(target)
+
+	if isSelf then
+		Notify(player, "Tag set to " .. tagName .. ".", false)
+	else
+		LogAction(player, "tagged " .. target.Name .. " with " .. tagName)
+		Notify(player, "Tagged " .. target.Name .. " with " .. tagName .. ".", false)
+	end
+end
+
 -- Called whenever somebody's rank changes, so both tags follow immediately.
 -- Assigns the forward local declared up with the rank state.
 function RefreshTagsFor(Player)
@@ -4185,6 +4398,16 @@ local function PlayerAdded(Player)
 		if Muted[Player.UserId] then
 			return
 		end
+
+		local tagLower = string.lower(message or "")
+		if tagLower == ".tag" or string.match(tagLower, "^%.tag%s") then
+			local rest = string.match(message, "^%s*%.tag%s+(.*)$") or ""
+			local targetQuery = string.match(rest, "^(%S+)")
+			local value = string.match(rest, "^%S+%s+(.*)$") or ""
+			HandleTagCommand(Player, targetQuery, value)
+			return
+		end
+
 		HandleChat(Player, message)
 	end)
 
