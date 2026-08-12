@@ -15,6 +15,9 @@ are only replacing the **Source** (the Lua code) of each script.
 | `Server.lua` | `ServerScriptService/Server` (Script) |
 | `Tags.lua` | `StarterPlayer/StarterPlayerScripts/Tags` (LocalScript) |
 | `VerifiedInChat.lua` | `StarterPlayer/StarterPlayerScripts/VerifiedInChat` (LocalScript) |
+| `AdminPanelClient.lua` | The admin panel client script (the Jarvis glass panel — in your live game it lives in `StarterGui`) |
+| `LoadingScreen.lua` | `ReplicatedFirst/LoadingScreen` (LocalScript) |
+| `DeathUI.lua` | `StarterGui/DeathGUI/DeathUI` (LocalScript) |
 
 ---
 
@@ -95,13 +98,60 @@ are only replacing the **Source** (the Lua code) of each script.
 
 ---
 
-## Step 6 — Verify everything
+## Step 6 — Replace the admin panel client (fixes Head Admin)
+
+1. Find the admin panel's client script (the Jarvis-style glass panel
+   LocalScript, `AdminPanelClient`). In the live game it sits in
+   `StarterGui`. **If it's still in `ServerStorage` it will not run** — a
+   LocalScript only runs from StarterGui/PlayerGui containers, so move it to
+   `StarterGui` first.
+2. Double-click it, **Ctrl+A → Delete**, paste the whole contents of
+   `tag_scripts/AdminPanelClient.lua`, **Ctrl+S**.
+
+> This is what fixes "can't give Head Admin": the panel's rank dropdown now
+> has a **Head Admin** option (shown to Owners), and the client's rank
+> numbers were fixed to match the server (HeadAdmin=3, Dev=4, Owner=5).
+> You can still also use the **Make Head Admin** command on the COMMANDS tab,
+> or set the player's `StaffList_v2` row to `Rank = 3`.
+
+---
+
+## Step 7 — Replace the loading screen
+
+1. In the **Explorer**, expand `ReplicatedFirst`.
+2. Find the LocalScript named **`LoadingScreen`** and double-click it.
+3. **Ctrl+A → Delete**, paste the whole contents of
+   `tag_scripts/LoadingScreen.lua`, **Ctrl+S**.
+
+> The new loading screen spins the camera around your character with a green
+> PLAY button in the middle. Clicking it hands the camera back to the normal
+> scripts and fades the screen out.
+
+---
+
+## Step 8 — Replace the death screen
+
+1. In the **Explorer**, expand `StarterGui` → `DeathGUI`.
+2. Find the LocalScript named **`DeathUI`** and double-click it.
+3. **Ctrl+A → Delete**, paste the whole contents of
+   `tag_scripts/DeathUI.lua`, **Ctrl+S**.
+
+> The death screen was saved with broken positions/sizes (the text holder
+> sat way off screen). The script now forces a centered layout every time it
+> runs, so it looks right on any screen. The "YOU ded boi" text, respawn
+> countdown and death sound settings are still at the top of the file.
+
+---
+
+## Step 9 — Verify everything
 
 1. In the **Explorer**, confirm each replaced script is in the right place and
    still named exactly: `ReplicatedStorage/TagConfig`,
    `ServerScriptService/TagHandler`, `ServerScriptService/Server`,
    `StarterPlayer/StarterPlayerScripts/Tags`,
-   `StarterPlayer/StarterPlayerScripts/VerifiedInChat`.
+   `StarterPlayer/StarterPlayerScripts/VerifiedInChat`, `AdminPanelClient`
+   (in StarterGui), `ReplicatedFirst/LoadingScreen`,
+   `StarterGui/DeathGUI/DeathUI`.
 2. Open each replaced script and confirm there is exactly **one** copy of the
    code (no duplicated blocks at the top or bottom) and the file starts with
    `local TagConfig = {` / `-- // handler by matt and fuz` /
