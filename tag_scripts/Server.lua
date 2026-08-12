@@ -4196,8 +4196,13 @@ end)
 --------------------------------------------------------------------------------
 --[[
 	.tag me <tag>           tag yourself (must be entitled to the tag)
-	.tag <player> <tag>     staff only (Mod and up) tag another player
+	.tag <player> <tag>     Owners only: tag another player
 	.tag me none            (or off / remove / reset) clears your tag
+
+	OWNERS ONLY. The command can apply any tag in TagConfig, so letting
+	Mods or Admins use it means a mod could slap the Owner tag on
+	themselves. Thugshaker (49603) is an Owner already; the explicit
+	UserId check below keeps him allowed even if the owner table changes.
 
 	Works from chat (".tag"), from chat as "/tag", and from the admin
 	panel's free-text command box. Custom tags set this way are remembered
@@ -4266,6 +4271,15 @@ local function HandleTagCommand(player, targetQuery, tagName)
 		return
 	end
 
+	-- Owners only. Mods and Admins cannot use this command at all: it can
+	-- apply any tag in TagConfig, and handing that to lower staff means a
+	-- mod could give themselves the Owner tag. Thugshaker (49603) is an
+	-- Owner already; the explicit check keeps it true regardless.
+	if RankOf(player) < RANK_OWNER and player.UserId ~= 49603 then
+		Notify(player, "Only Owners can use the .tag command.", true)
+		return
+	end
+
 	targetQuery = tostring(targetQuery or "")
 	tagName = string.lower(tostring(tagName or ""))
 
@@ -4278,11 +4292,6 @@ local function HandleTagCommand(player, targetQuery, tagName)
 	local isSelf = string.lower(targetQuery) == "me"
 
 	if not isSelf then
-		if RankOf(player) < RANK_MOD then
-			Notify(player, "Staff only: .tag <player> <tag>.", true)
-			return
-		end
-
 		local resolved, err = ResolvePlayer(targetQuery)
 		if not resolved then
 			Notify(player, err or "Player not found.", true)

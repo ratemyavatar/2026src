@@ -16,16 +16,22 @@ Works from chat (dot or slash form) and from the admin panel's free-text command
 
 ```
 .tag me <tag>          tag yourself (must be entitled to the tag)
-.tag <player> <tag>    staff only (Mod and up) tag another player
+.tag <player> <tag>    Owners only: tag another player
 .tag me none           (or off / remove / reset) clears your tag
 ```
+
+**Owners only** — thugshaker (49603) is an Owner already, and there's an
+explicit UserId check keeping him allowed even if the owner table changes.
+Mods and Admins get "Only Owners can use the .tag command." — the command can
+apply *any* tag in `TagConfig`, so letting lower staff use it would let a mod
+give themselves the Owner tag.
 
 Examples:
 
 - `.tag me thug` → thugshaker gets the `[Thug]` nametag + gold `[Thug]` chat tag.
-- `.tag Thugshaker thug` (staff) → same, applied to another player.
+- `.tag Thugshaker thug` (owner) → same, applied to another player.
 - `.tag me headadmin` → the head admin gets the `[Head Admin]` gold tag.
-- `/tag bob premium` (staff, from chat or the panel box) → same as above.
+- `/tag bob premium` (owner, from chat or the panel box) → same as above.
 
 Rules built in:
 
@@ -33,10 +39,10 @@ Rules built in:
   `TagConfig` containing your UserId (e.g. thugshaker + `thug`), your actual
   staff rank tag (`mod` / `admin` / `headadmin`), or anything if you're
   Head Admin / Developer / Owner.
-- **`.tag <player>`** — staff only (Mod+), respects the normal rank rules
-  (can't tag someone who outranks you). `owner` / `developer` tags are
-  script-locked, and rank tags (`mod`, `admin`, `headadmin`) can only be
-  applied to players who actually hold that rank.
+- **`.tag <player>`** — Owners only (Mods/Admins can't use the command at all),
+  respects the normal rank rules (can't tag someone who outranks you).
+  `owner` / `developer` tags are script-locked, and rank tags (`mod`, `admin`,
+  `headadmin`) can only be applied to players who actually hold that rank.
 - The tag is stored in the player's `ActiveTag` attribute, so it **survives
   respawns** (TagHandler re-applies the nametag) and re-applies to the chat
   speaker whenever one appears (Server.lua `ApplyChatTag` reads the same
