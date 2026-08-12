@@ -4150,6 +4150,9 @@ local function ApplyChatTag(Player)
 					{TagText = displayText, TagColor = color},
 				})
 				speaker:SetExtraData("NameColor", color)
+				-- The legacy default chat reads ChatColor for the message text,
+				-- so a custom tag also recolours what the player types.
+				speaker:SetExtraData("ChatColor", color)
 				return
 			end
 		end
@@ -4160,12 +4163,14 @@ local function ApplyChatTag(Player)
 				{TagText = custom.Text, TagColor = custom.Color},
 			})
 			speaker:SetExtraData("NameColor", custom.Color)
+			speaker:SetExtraData("ChatColor", custom.Color)
 			return
 		end
 
 		local rank = RankOf(Player)
 		if rank < RANK_MOD then
 			speaker:SetExtraData("Tags", {})
+			speaker:SetExtraData("ChatColor", Color3.fromRGB(255, 255, 255))
 			return
 		end
 
@@ -4174,6 +4179,8 @@ local function ApplyChatTag(Player)
 		})
 		-- Colour their name to match, so the tag does not look detached.
 		speaker:SetExtraData("NameColor", RANK_COLOUR[rank])
+		-- And colour the message text itself to match the tag.
+		speaker:SetExtraData("ChatColor", RANK_COLOUR[rank])
 	end)
 
 	if not ok then

@@ -126,6 +126,13 @@ Shimmer, Head Admin = purple Spin, Developer = green Breath, Owner = yellow
 Pulse. The thug tag is black with a white glint sweep (new "Thug" animation
 style in `Tags.lua`); its chat tag stays yellow-gold so it stays readable.
 
+**Chat text colour:** whenever a player has a chat tag, the colour of the
+message text they type in chat now matches the tag colour — custom tags
+(e.g. `.tag me thug`, `.createtag` tags) use their colour, rank tags use the
+rank colour, and removing your tag resets your text to white. This uses the
+legacy default chat's `ChatColor` extra-data key via the same `SetExtraData`
+API (2021 compatible — no `task.*`, no new APIs).
+
 ---
 
 ## What NOT to touch
